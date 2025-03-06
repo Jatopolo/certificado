@@ -1,145 +1,171 @@
 <?php
 /*
 Plugin Name: Certificado Handball
-Description: Genera certificados en PDF para jugadores federados de handball.
-Version: 1.0
+Description: Genera certificados en PDF para jugadores federados usando un archivo CSV local.
+Version: 1.6
 Author: Javier (Jato)
-require_once plugin_dir_path(__FILE__) . 'vendor/autoload.php';
-
 */
+
+// Cargar DomPDF
+require_once plugin_dir_path(__FILE__) . 'vendor/autoload.php';
 
 if (!defined('ABSPATH')) {
     exit; // Evita el acceso directo.
 }
 
-/* ---------------------------
-   1. Creación del Shortcode y Formulario
----------------------------- */
+/* -----------------------------------------------------------------
+   1. Función para escribir logs en un archivo
+----------------------------------------------------------------- */
+function ch_log($mensaje) {
+    $logfile = plugin_dir_path(__FILE__) . 'log-certificado.txt';
+    file_put_contents($logfile, date('Y-m-d H:i:s') . " - " . $mensaje . "\n", FILE_APPEND);
+}
+
+/* -----------------------------------------------------------------
+   2. Shortcode y Formulario para Solicitar el Certificado
+----------------------------------------------------------------- */
 function ch_certificado_form_shortcode() {
-    // Muestra el formulario
     ob_start();
     ?>
     <form method="post">
-        <label for="carnet">Número de Carnet:</label>
-        <input type="text" name="carnet" id="carnet" required>
+        <label for="dato">Número de Carnet o DNI:</label>
+        <input type="text" name="dato" id="dato" required>
         <input type="submit" name="ch_submit" value="Generar Certificado">
     </form>
     <?php
 
-    // Procesa el formulario si se envía
-    if (isset($_POST['ch_submit']) && !empty($_POST['carnet'])) {
-        $carnet = sanitize_text_field($_POST['carnet']);
-        ch_process_certificado($carnet);
+    if (isset($_POST['ch_submit']) && !empty($_POST['dato'])) {
+        $dato = sanitize_text_field($_POST['dato']);
+        ch_log("Formulario recibido con dato: " . $dato);
+
+        $registro = ch_buscar_registro($dato);
+
+        if (!$registro) {
+            ch_log("Jugador no encontrado.");
+            echo '<p>No se encontró el jugador con ese número de carnet o DNI.</p>';
+            return ob_get_clean();
+        }
+
+        ch_generate_pdf_certificado($registro['club'], $registro['nombre_completo'], $registro['carnet'], $registro['dni']);
     }
 
     return ob_get_clean();
 }
 add_shortcode('certificado_handball', 'ch_certificado_form_shortcode');
 
-/* ---------------------------
-   2. Función para procesar la consulta y extraer datos
----------------------------- */
-function ch_process_certificado($carnet) {
-    // Construye la URL del sistema de control
-    $url = 'http://amebal.com.ar/control.php?n=' . urlencode($carnet);
-    $response = wp_remote_get($url);
+/* -----------------------------------------------------------------
+   3. Leer los Datos desde el Archivo CSV
+----------------------------------------------------------------- */
+function ch_get_local_data() {
+    $filePath = plugin_dir_path(__FILE__) . 'data/jugadores.csv';
 
-    if (is_wp_error($response)) {
-        echo '<p>Error al conectar con el sistema de control.</p>';
-        return;
+    if (!file_exists($filePath)) {
+        ch_log("Error: El archivo CSV no existe en " . $filePath);
+        return false;
     }
 
-    $html = wp_remote_retrieve_body($response);
+    ch_log("Intentando leer el archivo CSV...");
 
-    // Parsear el HTML recibido
-    $dom = new DOMDocument();
-    libxml_use_internal_errors(true); // Suprime errores por HTML mal formado
-    $dom->loadHTML($html);
-    libxml_clear_errors();
+    $data = [];
+    if (($handle = fopen($filePath, "r")) !== FALSE) {
+        $headers = fgetcsv($handle, 1000, ","); // Leer la primera fila (encabezados)
 
-    // Extraer el texto completo (en muchos casos la página es simple)
-    $content = $dom->textContent;
-
-    // Verifica si aparece "HABILITADO" en el contenido
-    if (strpos($content, 'HABILITADO') === false) {
-        echo '<p>El jugador no está habilitado o no se encontró información.</p>';
-        return;
+        while (($row = fgetcsv($handle, 1000, ",")) !== FALSE) {
+            $data[] = array_combine($headers, $row);
+        }
+        fclose($handle);
     }
 
-    // EXTRAER LOS DATOS:
-    // Suponiendo que la página tiene un formato similar a:
-    // CLUB ETIEC
-    // MarÃ­a Emilia Aciar
-    // Carnet: J-05299 D.N.I.: 51090209
-    // HABILITADO
-    //
-    // Se puede usar una expresión regular para capturar la información:
-    $pattern = '/^(.*)\n(.*)\nCarnet:\s*(.*)\s*D\.N\.I\.\:\s*(.*)\n/i';
-    if (preg_match($pattern, $content, $matches)) {
-        $club          = trim($matches[1]);
-        $nombreJugador = trim($matches[2]);
-        $carnetExtraido = trim($matches[3]);
-        $dni           = trim($matches[4]);
-    } else {
-        echo '<p>No se pudo extraer la información necesaria.</p>';
-        return;
-    }
-
-    // Una vez extraída la información, genera el PDF
-    ch_generate_pdf_certificado($club, $nombreJugador, $carnetExtraido, $dni);
+    ch_log("CSV leído con éxito. Total de registros: " . count($data));
+    return $data;
 }
 
-/* ---------------------------
-   3. Función para generar el certificado en PDF
----------------------------- */
-function ch_generate_pdf_certificado($club, $nombreJugador, $carnet, $dni) {
-    // Verifica que la librería mPDF esté disponible.
-    // Es recomendable instalar mPDF con Composer: en la carpeta del plugin, ejecuta
-    // "composer require mpdf/mpdf" y asegúrate de incluir el autoload.
-    if (!class_exists('Mpdf\Mpdf')) {
-        // Incluye el autoload de Composer (ajusta la ruta si es necesario)
-        if (file_exists(plugin_dir_path(__FILE__) . 'vendor/autoload.php')) {
-            require_once plugin_dir_path(__FILE__) . 'vendor/autoload.php';
-        } else {
-            echo '<p>La librería mPDF no está instalada. Instálala para generar el PDF.</p>';
-            return;
+/* -----------------------------------------------------------------
+   4. Buscar Jugador en el Archivo CSV
+----------------------------------------------------------------- */
+function ch_buscar_registro($dato) {
+    ch_log("Buscando el jugador con carnet o DNI: " . $dato);
+
+    $values = ch_get_local_data();
+    if (!$values || count($values) == 0) {
+        ch_log("Error: No se encontraron datos en el CSV.");
+        return false;
+    }
+
+    foreach ($values as $row) {
+        if (isset($row['Carnet']) && isset($row['DNI'])) {
+            if ($row['Carnet'] == $dato || $row['DNI'] == $dato) {
+                ch_log("Jugador encontrado: " . $row['Apellido'] . " " . $row['Nombre']);
+                return array(
+                    'club'   => $row['Institución'],
+                    'nombre_completo' => $row['Apellido'] . " " . $row['Nombre'],
+                    'carnet' => $row['Carnet'],
+                    'dni'    => $row['DNI']
+                );
+            }
         }
     }
 
-    // Crea el contenido HTML del certificado.
+    ch_log("Jugador no encontrado.");
+    return false;
+}
+
+/* -----------------------------------------------------------------
+   5. Generar el Certificado en PDF con Dompdf
+----------------------------------------------------------------- */
+function ch_generate_pdf_certificado($club, $nombreJugador, $carnet, $dni) {
+    ch_log("Generando PDF para: " . $nombreJugador);
+
+    require_once plugin_dir_path(__FILE__) . 'vendor/autoload.php';
+
+    $fecha = date('d/m/Y');
+
+    // URLs de imágenes del membrete y firma
+    $membrete = 'https://amebal.com/nueva/wp-content/plugins/certificado-handball/images/membrete.png';
+    $firma = 'https://amebal.com/nueva/wp-content/plugins/certificado-handball/images/firma.png';
+
+    // Plantilla HTML del Certificado
     $htmlCert = '
     <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; }
-                h1 { text-align: center; }
-                .info { margin: 20px; }
-                .firma { margin-top: 40px; text-align: right; }
-            </style>
-        </head>
-        <body>
-            <h1>Certificado de Jugador Federado</h1>
-            <div class="info">
-                <p><strong>Club:</strong> ' . esc_html($club) . '</p>
-                <p><strong>Nombre:</strong> ' . esc_html($nombreJugador) . '</p>
-                <p><strong>Carnet:</strong> ' . esc_html($carnet) . '</p>
-                <p><strong>DNI:</strong> ' . esc_html($dni) . '</p>
-                <p><strong>Estado:</strong> HABILITADO</p>
-            </div>
-            <div class="firma">
-                <p>Firma institucional:</p>
-                <img src="' . plugin_dir_url(__FILE__) . 'images/firma.png" alt="Firma Institucional" width="200">
-            </div>
-        </body>
+      <head>
+         <meta charset="UTF-8">
+         <style>
+            body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
+            header img { width: 100%; max-height: 150px; }
+            h1 { margin-top: 20px; font-size: 22px; }
+            .contenido { margin-top: 30px; font-size: 16px; line-height: 1.5; text-align: justify; }
+            .firma { margin-top: 40px; text-align: right; }
+            .firma img { width: 200px; }
+         </style>
+      </head>
+      <body>
+         <header>
+            <img src="' . $membrete . '" alt="Membrete">
+         </header>
+         <h1>CERTIFICADO JUGADOR/A FEDERADO</h1>
+         <div class="contenido">
+            <p>La Asociación Mendocina de Balonmano deja constar que <strong>' . esc_html($nombreJugador) . '</strong>, con DNI Nº <strong>' . esc_html($dni) . '</strong>, se encontraba como jugador(a) federado(a) en dicha asociación, perteneciente al club <strong>' . esc_html($club) . '</strong>.</p>
+            <p>Se extiende el presente CERTIFICADO para ser presentado ante quien lo requiera, a los <strong>' . esc_html($fecha) . '</strong>.</p>
+         </div>
+         <div class="firma">
+            <img src="' . $firma . '" alt="Firma Institucional">
+         </div>
+      </body>
     </html>';
 
-    // Genera el PDF y envíalo al navegador.
-    try {
-        $mpdf = new \Mpdf\Mpdf();
-        $mpdf->WriteHTML($htmlCert);
-        $mpdf->Output('certificado.pdf', 'I'); // "I" para mostrar en el navegador
-        exit; // Termina la ejecución después de mostrar el PDF.
-    } catch (Exception $e) {
-        echo '<p>Error al generar el PDF: ' . $e->getMessage() . '</p>';
-    }
+    // Generar PDF con DomPDF
+    $dompdf = new Dompdf\Dompdf();
+    $dompdf->loadHtml($htmlCert);
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+
+    // Guardar el PDF en la carpeta del plugin
+    $outputPath = plugin_dir_path(__FILE__) . 'certificados/certificado_' . $dni . '.pdf';
+    file_put_contents($outputPath, $dompdf->output());
+
+    ch_log("PDF guardado en: " . $outputPath);
+
+    // Enviar PDF al navegador
+    $dompdf->stream('certificado.pdf', array("Attachment" => false));
+    exit;
 }
