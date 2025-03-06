@@ -1,0 +1,38 @@
+2025-03-06 22:52:59 - Formulario recibido con dato: 49991586
+2025-03-06 22:52:59 - Buscando el jugador con carnet o DNI: 49991586
+2025-03-06 22:52:59 - Intentando leer el archivo CSV...
+2025-03-06 22:52:59 - CSV leído con éxito. Total de registros: 121
+2025-03-06 22:52:59 - Jugador encontrado: Aramburu Emilia
+2025-03-06 22:52:59 - Generando PDF para: Aramburu Emilia
+2025-03-06 22:58:18 - Formulario recibido con dato: 49991586
+2025-03-06 22:58:18 - Buscando el jugador con carnet o DNI: 49991586
+2025-03-06 22:58:18 - Intentando leer el archivo CSV...
+2025-03-06 22:58:18 - CSV leído con éxito. Total de registros: 121
+2025-03-06 22:58:18 - Jugador encontrado: Aramburu Emilia
+2025-03-06 22:58:18 - Generando PDF para: Aramburu Emilia
+2025-03-06 22:59:24 - Formulario recibido con dato: 49991586
+2025-03-06 22:59:24 - Buscando el jugador con carnet o DNI: 49991586
+2025-03-06 22:59:24 - Intentando leer el archivo CSV...
+2025-03-06 22:59:24 - CSV leído con éxito. Total de registros: 121
+2025-03-06 22:59:24 - Jugador encontrado: Aramburu Emilia
+2025-03-06 22:59:24 - Generando PDF para: Aramburu Emilia
+2025-03-06 23:01:11 - Formulario recibido con dato: 2793
+2025-03-06 23:01:11 - Buscando el jugador con carnet o DNI: 2793
+2025-03-06 23:01:11 - Intentando leer el archivo CSV...
+2025-03-06 23:01:11 - CSV leído con éxito. Total de registros: 121
+2025-03-06 23:01:11 - Jugador encontrado: Bordón Jimena Nahir
+2025-03-06 23:01:11 - Generando PDF para: Bordón Jimena Nahir
+2025-03-06 23:13:09 - Formulario recibido con dato: 2793
+2025-03-06 23:13:09 - Buscando el jugador con carnet o DNI: 2793
+2025-03-06 23:16:23 - Formulario recibido con dato: 2793
+2025-03-06 23:16:23 - Buscando el jugador con carnet o DNI: 2793
+2025-03-06 23:20:25 - Formulario recibido con dato: 49991586
+2025-03-06 23:20:25 - Buscando el jugador con carnet o DNI: 49991586
+2025-03-06 23:20:55 - Formulario recibido con dato: 49991586
+2025-03-06 23:20:55 - Buscando el jugador con carnet o DNI: 49991586
+2025-03-06 23:21:29 - Formulario recibido con dato: 49991586
+2025-03-06 23:21:29 - Buscando el jugador con carnet o DNI: 49991586
+2025-03-06 23:21:29 - Intentando leer el archivo CSV...
+2025-03-06 23:21:29 - CSV leído con éxito. Total de registros: 121
+2025-03-06 23:21:29 - Jugador encontrado: Aramburu Emilia
+2025-03-06 23:21:29 - Generando PDF para: Aramburu Emilia
